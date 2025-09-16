@@ -5,11 +5,13 @@ import LoveLetter2 from './components/LoveLetter2';
 import BirthdayCake from './components/BirthdayCake';
 import PhotoGallery from './components/PhotoGallery';
 import FinalSurprise from './components/FinalSurprise';
+import BackgroundAudio from './components/BackgroundAudio';
 
 type View = 'letter' | 'letter2' | 'cake' | 'gallery' | 'final';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('letter');
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   const renderView = () => {
     switch (currentView) {
@@ -27,12 +29,22 @@ const App: React.FC = () => {
         return <LoveLetter onPoemRead={() => setCurrentView('letter2')} />;
     }
   };
+  
+  const handleInteraction = () => {
+      if (!hasInteracted) {
+          setHasInteracted(true);
+      }
+  };
 
   return (
-    <main className="bg-rose-50 min-h-screen w-full flex items-center justify-center font-serif text-gray-800 p-4 transition-colors duration-1000">
+    <main 
+      className="bg-rose-50 min-h-screen w-full flex items-center justify-center font-serif text-gray-800 p-4 transition-colors duration-1000"
+      onClick={handleInteraction}
+    >
       <div className="w-full max-w-4xl mx-auto">
         {renderView()}
       </div>
+      {hasInteracted && <BackgroundAudio />}
     </main>
   );
 };

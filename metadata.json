@@ -1,0 +1,7 @@
+{
+  "name": "Kejutan Ulang Tahun untuk Fifi",
+  "description": "Sebuah website kejutan ulang tahun spesial untuk Fifi yang ke-24, penuh dengan cinta, harapan, dan kenangan indah.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

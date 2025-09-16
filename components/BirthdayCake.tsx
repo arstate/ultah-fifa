@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FlameIcon from './icons/FlameIcon';
 
@@ -93,17 +92,21 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
   const startRecordingWish = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.error('Speech Recognition not supported.');
       alert("Maaf, browser-mu tidak mendukung fitur pengenalan suara. Kamu bisa melanjutkan tanpa merekam doa.");
-      setPhase('permission_denied'); // Fallback to manual mode
+      setPhase('permission_denied');
       return;
+    }
+
+    // Stop any existing recognition to prevent conflicts
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    recognition.interimResults = true;
     recognition.lang = 'id-ID';
-    recognition.continuous = false; // Important change for mobile performance
+    recognition.interimResults = true; // Show results as they are recognized
+    recognition.continuous = false;    // Stop after the first utterance
 
     recognition.onstart = () => {
       setIsRecording(true);
@@ -111,16 +114,23 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     };
 
     recognition.onresult = (event: any) => {
-      let transcript = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
-      }
+      // Concatenate all results (interim and final) to form the transcript
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0])
+        .map((result: any) => result.transcript)
+        .join('');
       setCurrentTranscript(transcript);
     };
     
     recognition.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        setIsRecording(false);
+        console.error("Speech recognition error:", event.error, event.message);
+        if (event.error === 'no-speech') {
+            alert("Maaf, saya tidak mendengar suaramu. Coba lagi ya.");
+        } else if (event.error === 'not-allowed') {
+            setPhase('permission_denied'); // Safeguard for permission issues
+        } else {
+            alert(`Terjadi kesalahan perekaman: ${event.error}. Silakan coba lagi.`);
+        }
     };
 
     recognition.onend = () => {
@@ -358,8 +368,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
                     <div key={i} className="relative flex flex-col items-center">
                         {isLit && (
                            <div className="absolute -top-10 w-8 h-12">
-                               <div className="candle-glow"/>
-                               <FlameIcon className="relative w-full h-full text-amber-400 flame-flicker" />
+                               <FlameIcon className="relative w-full h-full text-amber-400" />
                            </div>
                         )}
                         <div 

@@ -1,10 +1,12 @@
 
 import React, { useState } from 'react';
 import LoveLetter from './components/LoveLetter';
+import LoveLetter2 from './components/LoveLetter2';
 import BirthdayCake from './components/BirthdayCake';
 import PhotoGallery from './components/PhotoGallery';
+import FinalSurprise from './components/FinalSurprise';
 
-type View = 'letter' | 'cake' | 'gallery';
+type View = 'letter' | 'letter2' | 'cake' | 'gallery' | 'final';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('letter');
@@ -12,13 +14,17 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case 'letter':
-        return <LoveLetter onPoemRead={() => setCurrentView('cake')} />;
+        return <LoveLetter onPoemRead={() => setCurrentView('letter2')} />;
+      case 'letter2':
+        return <LoveLetter2 onNext={() => setCurrentView('cake')} />;
       case 'cake':
         return <BirthdayCake onCandlesBlown={() => setCurrentView('gallery')} />;
       case 'gallery':
-        return <PhotoGallery />;
+        return <PhotoGallery onShowFinalSurprise={() => setCurrentView('final')} />;
+      case 'final':
+        return <FinalSurprise />;
       default:
-        return <LoveLetter onPoemRead={() => setCurrentView('cake')} />;
+        return <LoveLetter onPoemRead={() => setCurrentView('letter2')} />;
     }
   };
 

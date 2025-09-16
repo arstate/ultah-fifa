@@ -116,7 +116,8 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     recognitionRef.current = recognition;
     recognition.lang = 'id-ID';
     recognition.interimResults = true; // Show results as they are recognized
-    recognition.continuous = false;    // Stop after the first utterance
+    // ANDROID FIX: Use continuous mode and rely on manual stop for better reliability.
+    recognition.continuous = true;
 
     recognition.onstart = () => {
       setIsRecording(true);
@@ -125,11 +126,17 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
 
     recognition.onresult = (event: any) => {
       // Concatenate all results (interim and final) to form the transcript
-      const transcript = Array.from(event.results)
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
-        .join('');
-      setCurrentTranscript(transcript);
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setCurrentTranscript(finalTranscript + interimTranscript);
     };
     
     recognition.onerror = (event: any) => {
@@ -141,6 +148,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
         } else {
             alert(`Terjadi kesalahan perekaman: ${event.error}. Silakan coba lagi.`);
         }
+        setIsRecording(false);
     };
 
     recognition.onend = () => {
@@ -154,7 +162,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
       if (recognitionRef.current) {
           recognitionRef.current.stop();
       }
-      setIsRecording(false);
+      // onend handler will set isRecording to false
   };
 
   const startBlowing = useCallback(() => {

@@ -15,6 +15,7 @@ interface BirthdayCakeProps {
 }
 
 type Phase = 'prompt' | 'permission_denied' | 'wishing' | 'blowing' | 'blown';
+type WishInputMode = 'speech' | 'text';
 
 const wishPrompts = [
     "Pertama, ucapkan permohonan untuk dirimu sendiri...",
@@ -31,6 +32,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [typedWish, setTypedWish] = useState('');
   const [speechApiSupported, setSpeechApiSupported] = useState(true);
+  const [wishInputMode, setWishInputMode] = useState<WishInputMode>('speech');
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -80,6 +82,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechApiSupported(false);
+      setWishInputMode('text'); // Default to text if not supported
     }
     // Cleanup on component unmount
     return () => {
@@ -164,7 +167,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
 
     if (!streamRef.current) {
         console.error("Mic stream not available for blow detection.");
-        setPhase('permission_denied');
+        setPhase('permission_denied'); // Fallback to manual mode
         return;
     }
 
@@ -249,6 +252,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     if (speechApiSupported) {
         requestMicPermission();
     } else {
+        setWishInputMode('text'); // Ensure text mode if not supported
         setPhase('wishing');
     }
   };
@@ -256,7 +260,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
 
   const handleNextWish = () => {
     const newWishes = [...wishes];
-    const wishText = speechApiSupported ? currentTranscript : typedWish;
+    const wishText = wishInputMode === 'speech' && speechApiSupported ? currentTranscript : typedWish;
     newWishes[currentWishIndex] = wishText.trim() || "(tidak ada permohonan)";
     setWishes(newWishes);
     setCurrentTranscript('');
@@ -267,10 +271,10 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     } else {
         // This is the final wish, save all wishes to Firebase before proceeding
         saveWishesToFirebase(newWishes);
-        if (speechApiSupported && streamRef.current) {
+        if (wishInputMode === 'speech' && speechApiSupported && streamRef.current) {
             startBlowing();
         } else {
-            // Go to manual blowing if API not supported or mic was denied
+            // Go to manual blowing if API not supported, mic was denied, or user chose text
             setPhase('permission_denied');
         }
     }
@@ -302,41 +306,46 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
         );
       case 'wishing':
         const isLastWish = currentWishIndex === wishPrompts.length - 1;
-        if (speechApiSupported) {
-            return (
-              <>
-                <div className="mt-12 p-4 bg-white/60 rounded-xl shadow-inner w-full max-w-lg transition-opacity duration-500">
-                    <p className="text-gray-500 text-sm mb-1 font-semibold">{`Permohonan ${currentWishIndex + 1}/${wishPrompts.length}:`}</p>
-                    <p className="text-lg text-rose-800 font-bold mb-2">{wishPrompts[currentWishIndex]}</p>
-                    <p className="text-md italic text-gray-700 min-h-[2.5em] bg-white/50 p-2 rounded">
-                        {isRecording ? 'Mendengarkan...' : (currentTranscript ? `"${currentTranscript}"` : '...')}
-                    </p>
+        return (
+            <>
+              {speechApiSupported && (
+                <div className="mt-8 mb-4 flex justify-center items-center gap-2 p-1 bg-gray-200 rounded-full">
+                    <button onClick={() => setWishInputMode('speech')} className={`px-4 py-1 text-sm font-semibold rounded-full transition-colors duration-200 ${wishInputMode === 'speech' ? 'bg-sky-500 text-white shadow' : 'text-gray-600'}`}>Ucapkan</button>
+                    <button onClick={() => setWishInputMode('text')} className={`px-4 py-1 text-sm font-semibold rounded-full transition-colors duration-200 ${wishInputMode === 'text' ? 'bg-sky-500 text-white shadow' : 'text-gray-600'}`}>Ketik</button>
                 </div>
-                <div className="flex items-center space-x-4 mt-6">
-                    {!isRecording ? (
-                        <button onClick={startRecordingWish} className="px-6 py-3 bg-sky-500 text-white font-bold rounded-full shadow-lg hover:bg-sky-600 transition-transform hover:scale-105">
-                            Mulai Rekam
-                        </button>
-                    ) : (
-                        <button onClick={stopRecordingWish} className="px-6 py-3 bg-red-500 text-white font-bold rounded-full shadow-lg animate-pulse">
-                            Berhenti Merekam
-                        </button>
-                    )}
-    
-                    <button 
-                        onClick={handleNextWish} 
-                        disabled={!currentTranscript.trim() || isRecording}
-                        className="px-6 py-3 bg-green-500 text-white font-bold rounded-full shadow-lg hover:bg-green-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                        {isLastWish ? 'Selesai & Tiup Lilin' : 'Lanjut'}
-                    </button>
-                </div>
-              </>
-            );
-        } else {
-            return (
+              )}
+      
+              {(wishInputMode === 'speech' && speechApiSupported) ? (
                 <>
-                  <div className="mt-12 p-4 bg-white/60 rounded-xl shadow-inner w-full max-w-lg transition-opacity duration-500">
+                  <div className="mt-4 p-4 bg-white/60 rounded-xl shadow-inner w-full max-w-lg transition-opacity duration-500">
+                      <p className="text-gray-500 text-sm mb-1 font-semibold">{`Permohonan ${currentWishIndex + 1}/${wishPrompts.length}:`}</p>
+                      <p className="text-lg text-rose-800 font-bold mb-2">{wishPrompts[currentWishIndex]}</p>
+                      <p className="text-md italic text-gray-700 min-h-[2.5em] bg-white/50 p-2 rounded">
+                          {isRecording ? 'Mendengarkan...' : (currentTranscript ? `"${currentTranscript}"` : '...')}
+                      </p>
+                  </div>
+                  <div className="flex items-center space-x-4 mt-6">
+                      {!isRecording ? (
+                          <button onClick={startRecordingWish} className="px-6 py-3 bg-sky-500 text-white font-bold rounded-full shadow-lg hover:bg-sky-600 transition-transform hover:scale-105">
+                              Mulai Rekam
+                          </button>
+                      ) : (
+                          <button onClick={stopRecordingWish} className="px-6 py-3 bg-red-500 text-white font-bold rounded-full shadow-lg animate-pulse">
+                              Berhenti Merekam
+                          </button>
+                      )}
+                      <button 
+                          onClick={handleNextWish} 
+                          disabled={!currentTranscript.trim() || isRecording}
+                          className="px-6 py-3 bg-green-500 text-white font-bold rounded-full shadow-lg hover:bg-green-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      >
+                          {isLastWish ? 'Selesai & Tiup Lilin' : 'Lanjut'}
+                      </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-4 p-4 bg-white/60 rounded-xl shadow-inner w-full max-w-lg transition-opacity duration-500">
                       <p className="text-gray-500 text-sm mb-1 font-semibold">{`Permohonan ${currentWishIndex + 1}/${wishPrompts.length}:`}</p>
                       <p className="text-lg text-rose-800 font-bold mb-2">{wishPrompts[currentWishIndex]}</p>
                       <textarea
@@ -357,18 +366,24 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
                       </button>
                   </div>
                 </>
-              );
-        }
+              )}
+            </>
+          );
       case 'blowing':
         return (
-          <p className="mt-12 text-xl font-bold text-rose-300 animate-pulse">
-            Sekarang... tiup lilinnya! ({candlesRemaining} tersisa)
-          </p>
+          <div className="mt-12 text-center">
+            <p className="text-xl font-bold text-rose-300 animate-pulse mb-4">
+              Sekarang... tiup lilinnya! ({candlesRemaining} tersisa)
+            </p>
+             <button onClick={handleManualBlow} disabled={candlesRemaining === 0} className="px-6 py-3 bg-rose-500 text-white font-bold rounded-full shadow-lg hover:bg-rose-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                  Tiup Satu Lilin! ({candlesRemaining} tersisa)
+              </button>
+          </div>
         );
       case 'permission_denied':
         return (
           <div className="mt-12 text-center">
-              <p className="text-sm text-red-600 mb-4">Mikrofon tidak berfungsi atau tidak diizinkan. Klik tombol untuk meniup lilin satu per satu.</p>
+              <p className="text-sm text-red-600 mb-4">Mikrofon tidak berfungsi atau kamu memilih mode manual. Klik tombol untuk meniup lilin satu per satu.</p>
               <button onClick={handleManualBlow} disabled={candlesRemaining === 0} className="px-6 py-3 bg-rose-500 text-white font-bold rounded-full shadow-lg hover:bg-rose-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">
                   Tiup Satu Lilin! ({candlesRemaining} tersisa)
               </button>

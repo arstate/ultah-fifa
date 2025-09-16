@@ -29,6 +29,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
   const [wishes, setWishes] = useState<string[]>(['', '', '']);
   const [currentWishIndex, setCurrentWishIndex] = useState(0);
   const [currentTranscript, setCurrentTranscript] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -58,6 +59,21 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
     }
   }, []);
 
+  const requestMicPermission = useCallback(async () => {
+      if (streamRef.current) return true; // Already have permission
+      try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          streamRef.current = stream;
+          setPhase('wishing');
+          return true;
+      } catch (err) {
+          console.error('Microphone access denied:', err);
+          setPhase('permission_denied');
+          return false;
+      }
+  }, []);
+
+
   useEffect(() => {
     // Cleanup on component unmount
     return () => {
@@ -74,52 +90,52 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
   }, [candlesLit, phase, allBlownOut, stopAllMedia]);
 
 
-  const startWishing = useCallback(async () => {
-    stopAllMedia();
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'id-ID';
-
-        recognition.onstart = () => {
-            setPhase('wishing');
-        };
-
-        recognition.onresult = (event: any) => {
-            let interimTranscript = '';
-            let finalTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript.trim() + ' ';
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            if (finalTranscript) {
-                 setCurrentTranscript(prev => (prev.trim() + ' ' + finalTranscript.trim()).trim());
-            }
-        };
-
-        recognition.start();
-      } else {
-        console.error('Speech Recognition not supported. Skipping to blowing phase.');
-        startBlowing();
-      }
-
-    } catch (err) {
-      console.error('Microphone access denied:', err);
-      setPhase('permission_denied');
+  const startRecordingWish = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.error('Speech Recognition not supported.');
+      alert("Maaf, browser-mu tidak mendukung fitur pengenalan suara. Kamu bisa melanjutkan tanpa merekam doa.");
+      setPhase('permission_denied'); // Fallback to manual mode
+      return;
     }
-  }, [stopAllMedia]);
 
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.interimResults = true;
+    recognition.lang = 'id-ID';
+    recognition.continuous = false; // Important change for mobile performance
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setCurrentTranscript('');
+    };
+
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        transcript += event.results[i][0].transcript;
+      }
+      setCurrentTranscript(transcript);
+    };
+    
+    recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+  };
+  
+  const stopRecordingWish = () => {
+      if (recognitionRef.current) {
+          recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+  };
 
   const startBlowing = useCallback(() => {
     if (recognitionRef.current) {
@@ -247,7 +263,7 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
         return (
           <>
             <p className="text-lg text-gray-600 mb-8">Ada 3 permohonan yang harus kamu ucapkan...</p>
-            <button onClick={startWishing} className="mt-12 px-6 py-3 bg-sky-500 text-white font-bold rounded-full shadow-lg hover:bg-sky-600 transition-transform hover:scale-105">
+            <button onClick={requestMicPermission} className="mt-12 px-6 py-3 bg-sky-500 text-white font-bold rounded-full shadow-lg hover:bg-sky-600 transition-transform hover:scale-105">
                 Aktifkan Mikrofon & Mulai Berdoa
             </button>
           </>
@@ -260,16 +276,28 @@ const BirthdayCake: React.FC<BirthdayCakeProps> = ({ onCandlesBlown }) => {
                 <p className="text-gray-500 text-sm mb-1 font-semibold">{`Permohonan ${currentWishIndex + 1}/${wishPrompts.length}:`}</p>
                 <p className="text-lg text-rose-800 font-bold mb-2">{wishPrompts[currentWishIndex]}</p>
                 <p className="text-md italic text-gray-700 min-h-[2.5em] bg-white/50 p-2 rounded">
-                    {currentTranscript ? `"${currentTranscript}"` : '...'}
+                    {isRecording ? 'Mendengarkan...' : (currentTranscript ? `"${currentTranscript}"` : '...')}
                 </p>
             </div>
-            <button 
-                onClick={handleNextWish} 
-                disabled={!currentTranscript.trim()}
-                className="mt-8 px-6 py-3 bg-green-500 text-white font-bold rounded-full shadow-lg hover:bg-green-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isLastWish ? 'Selesai, Saatnya Tiup Lilin!' : 'Lanjut ke Permohonan Berikutnya'}
-            </button>
+            <div className="flex items-center space-x-4 mt-6">
+                {!isRecording ? (
+                    <button onClick={startRecordingWish} className="px-6 py-3 bg-sky-500 text-white font-bold rounded-full shadow-lg hover:bg-sky-600 transition-transform hover:scale-105">
+                        Mulai Rekam
+                    </button>
+                ) : (
+                    <button onClick={stopRecordingWish} className="px-6 py-3 bg-red-500 text-white font-bold rounded-full shadow-lg animate-pulse">
+                        Berhenti Merekam
+                    </button>
+                )}
+
+                <button 
+                    onClick={handleNextWish} 
+                    disabled={!currentTranscript.trim() || isRecording}
+                    className="px-6 py-3 bg-green-500 text-white font-bold rounded-full shadow-lg hover:bg-green-600 transition-transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                    {isLastWish ? 'Selesai & Tiup Lilin' : 'Lanjut'}
+                </button>
+            </div>
           </>
         );
       case 'blowing':
